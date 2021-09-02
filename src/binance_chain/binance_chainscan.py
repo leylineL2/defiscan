@@ -21,7 +21,6 @@ def main():
         params={'page': 1})
     logger.debug(f"response:{response}")
     transactions = response.json()
-    transactions = eval(logs)
     print(f"transactions:{transactions}")
     num_transactions = transactions["txNums"]
     logger.debug(num_transactions)
