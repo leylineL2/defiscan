@@ -41,6 +41,7 @@ logger.addHandler(logging.NullHandler())
 # Deposit                    : swap_deposit
 # Withdraw                   : swap_withdraw
 # Claim Swap Reward          : claim_swap_reward
+# Comitty Vote               : committee_vote
 
 def set_root_logger():
   root_logget = logging.getLogger(name=None)
@@ -241,6 +242,8 @@ def classify(timestamp, events, fee, txhash, address, chain_id):
     logger.info('repay_cdp')
   elif action == 'withdraw_cdp':
     logger.info('withdraw_cdp')
+  elif action == 'committee_vote':
+    logger.info('committee_vote')
   elif action == 'claimAtomicSwap':
     if fee == 0: return results
     results.append({'Action': 'SENDFEE', 'Base': 'KAVA', 'Volume': fee, 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': 'atomic swap fee'})
@@ -454,4 +457,3 @@ def main():
 if __name__== '__main__':
   set_root_logger()
   main()
-
