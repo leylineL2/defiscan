@@ -39,7 +39,7 @@ def get_transactions(address):
     time.sleep(5)
     response = requests.get(
         'https://api-kava.cosmostation.io/v1/account/new_txs/%s' % address,
-        params={'from': last_id, 'limit': 50})
+        params={'from': last_id, 'limit': 50},headers={'Origin':'https://www.mintscan.io', 'Referer':'https://www.mintscan.io/'})
     transactions = response.json()
     num_transactions = len(transactions)
     #print(num_transactions)
@@ -62,4 +62,3 @@ def main():
 if __name__== '__main__':
   set_root_logger()
   main()
-
