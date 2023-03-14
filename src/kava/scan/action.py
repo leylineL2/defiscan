@@ -383,19 +383,43 @@ def SwapWithDraw(events,fee):
     amount, currency = split_amount(amount_value)
     amounts[currency] = amount
   logger.debug(f"amount: {amount}")
+  print(f"amount: {amount}")
+  print(f"{shares} {swp_lp_amount[pool_id]['shares']}")
   if swp_lp_amount[pool_id]["shares"] - Decimal(shares) < 0:
     raise ValueError("Withdrawals are occurring beyond expectations.")
-  swp_lp_amount[pool_id]["shares"] -= Decimal(shares)
+  ratio = Decimal(shares) / swp_lp_amount[pool_id]["shares"]
   for currency, amount in amounts.items():
-    if swp_lp_amount[pool_id][currency] - amount >= 0:
-      swp_lp_amount[pool_id][currency] -= amount
-    elif swp_lp_amount[pool_id][currency] - amount < 0:
-      bonus_amount = amount - swp_lp_amount[pool_id][currency]
-      swp_lp_amount[pool_id][currency] -= bonus_amount
-      results.append({'Action': 'BONUS', 'Base': currency, 'Volume': bonus_amount, 'Price': None, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Bonus'})
-  if swp_lp_amount[pool_id]["shares"] == 0:
-    for currency, amount in amounts.items():
-      if swp_lp_amount[pool_id][currency] > 0:
-        sell_amount = swp_lp_amount[pool_id][currency]
-        results.append({'Action': 'SELL', 'Base': currency, 'Volume': sell_amount, 'Price': 0, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Sell'})
+    expect_amount = swp_lp_amount[pool_id][currency] * ratio
+    c_amount = expect_amount - amount
+    print(c_amount)
+    print(f"{c_amount} {pool_id} {ratio} {currency} {amount} {swp_lp_amount[pool_id][currency]}")
+    if(c_amount < 0):
+      c_amount *= Decimal('-1')
+      results.append({'Action': 'BONUS', 'Base': currency, 'Volume': c_amount, 'Price': None, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Bonus'})
+    elif(c_amount > 0):
+      results.append({'Action': 'LOSS', 'Base': currency, 'Volume': c_amount, 'Price': 0, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Sell'})
+  #   if swp_lp_amount[pool_id][currency] - amount >= 0:
+  #     swp_lp_amount[pool_id][currency] -= amount
+  #   elif swp_lp_amount[pool_id][currency] - amount < 0:
+  #     bonus_amount = amount - swp_lp_amount[pool_id][currency]
+  #     swp_lp_amount[pool_id][currency] -= bonus_amount
+  #     results.append({'Action': 'BONUS', 'Base': currency, 'Volume': bonus_amount, 'Price': None, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Bonus'})
+  # if swp_lp_amount[pool_id]["shares"] == 0:
+  #   for currency, amount in amounts.items():
+  #     if swp_lp_amount[pool_id][currency] > 0:
+  #       sell_amount = swp_lp_amount[pool_id][currency]
+  #       results.append({'Action': 'SELL', 'Base': currency, 'Volume': sell_amount, 'Price': 0, 'Counter': 'JPY', 'Fee': fee, 'FeeCcy': 'KAVA', 'Comment': 'Liquidity Provide Sell'})
+    swp_lp_amount[pool_id][currency] -= expect_amount
+  swp_lp_amount[pool_id]["shares"] -= Decimal(shares)
   return results
+
+def AddTimestampAndSource(result,time_stamp,source):
+  print(f"Addtime {result}")
+  result['Timestamp'] = time_stamp
+  result['Source'] = source
+  return result
+
+def _clear_lp():
+  # for unittest
+  global swp_lp_amount
+  swp_lp_amount = {}

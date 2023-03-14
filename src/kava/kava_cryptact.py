@@ -17,6 +17,8 @@ try:
 except:
   raise Exception("execute\n $cp extratx_dict.py_templrate extratx_dict.py")
 
+from scan.action import SwapDeposit, SwapWithDraw, MintAndDelegate, BurnAndWithdraw, AddTimestampAndSource
+
 logger = logging.getLogger(name=__name__)
 logger.addHandler(logging.NullHandler())
 balance_sheet = BalanceSeet()
@@ -252,7 +254,7 @@ def create_cryptact_csv(address):
         lend_result = balance_sheet.put_lend_balance_sheet(currency, amount)
         results.append({'Timestamp': timestamp, 'Action': 'LEND', 'Source': 'kava', 'Base': currency, 'Volume': lend_result[0], 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'cdp deposit https://www.mintscan.io/kava/txs/{txhash}'})
         balance_sheet.put_spot_balance_sheet("KAVA", -fee)
-      elif action in ["draw_cdp", "/kava.cdp.v1beta1.MsgDrawDebt", "/kava.hard.v1beta1.MsgBorrow"]:
+      elif action in ["draw_cdp", "/kava.cdp.v1beta1.MsgDrawDebt", "/kava.hard.v1beta1.MsgBorrow","hard_borrow"]:
         transfer_event = get_event(raw_log["events"], "transfer")
         amount = get_attribute(transfer_event["attributes"], "amount")["value"]
         amount, currency = split_amount(amount)
@@ -286,7 +288,7 @@ def create_cryptact_csv(address):
             results.append({'Timestamp': timestamp, 'Action': 'RECOVER', 'Source': 'kava', 'Base': currency, 'Volume': lend_result[0], 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'cdp repay https://www.mintscan.io/kava/txs/{txhash}'})
             if lend_result[1] != Decimal("0.0"):
               results.append({'Timestamp': timestamp, 'Action': 'BONUS', 'Source': 'kava', 'Base': currency, 'Volume': lend_result[1], 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'lend interest https://www.mintscan.io/kava/txs/{txhash}'})
-      elif action in ["/kava.hard.v1beta1.MsgRepay"]:
+      elif action in ["/kava.hard.v1beta1.MsgRepay","hard_repay"]:
         transfer_event = get_event(raw_log["events"], "transfer")
         amount = get_attribute(transfer_event["attributes"], "amount")["value"]
         amount, currency = split_amount(amount)
@@ -311,7 +313,7 @@ def create_cryptact_csv(address):
         if lend_result[1] != Decimal("0.0"):
           results.append({'Timestamp': timestamp, 'Action': 'BONUS', 'Source': 'kava', 'Base': currency, 'Volume': lend_result[1], 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'lend interest https://www.mintscan.io/kava/txs/{txhash}'})
         balance_sheet.put_spot_balance_sheet("KAVA", -fee)
-      elif action in ["claim_harvest_reward", "claim_reward", "withdraw_delegator_reward", "claim_hard_reward", "claim_usdx_minting_reward", "claim_delegator_reward", "/kava.incentive.v1beta1.MsgClaimHardReward", "/kava.incentive.v1beta1.MsgClaimDelegatorReward", "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward"]:
+      elif action in ["claim_harvest_reward", "claim_reward", "withdraw_delegator_reward", "claim_hard_reward", "claim_usdx_minting_reward", "claim_delegator_reward", "claim_swap_reward", "/kava.incentive.v1beta1.MsgClaimHardReward", "/kava.incentive.v1beta1.MsgClaimDelegatorReward", "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward", "/kava.incentive.v1beta1.MsgClaimEarnReward"]:
         transfer_event = get_event(raw_log["events"], "transfer")
         amounts_attribute = list(filter(lambda x: x["key"] == "amount", transfer_event["attributes"]))
         for amount_attribute in amounts_attribute:
@@ -322,6 +324,10 @@ def create_cryptact_csv(address):
             balance_sheet.put_spot_balance_sheet(currency, amount)
         set_fee(fee, results, timestamp, txhash)
       elif action in ["vote"]:
+        if fee != Decimal("0.0"):
+          results.append({'Timestamp': timestamp, 'Action': 'SENDFEE', 'Source': 'kava', 'Base': 'KAVA', 'Volume': fee, 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'create atomic swap https://www.mintscan.io/kava/txs/{txhash}'})
+          balance_sheet.put_spot_balance_sheet("KAVA", -fee)
+      elif action in ["begin_redelegate"]:
         if fee != Decimal("0.0"):
           results.append({'Timestamp': timestamp, 'Action': 'SENDFEE', 'Source': 'kava', 'Base': 'KAVA', 'Volume': fee, 'Price': None, 'Counter': 'JPY', 'Fee': 0, 'FeeCcy': 'KAVA', 'Comment': f'create atomic swap https://www.mintscan.io/kava/txs/{txhash}'})
           balance_sheet.put_spot_balance_sheet("KAVA", -fee)
@@ -345,7 +351,7 @@ def create_cryptact_csv(address):
             balance_sheet.put_spot_balance_sheet(currency, amount)
         elif len(transfer_event) != 0:
           raise ValueError("too many transfer events")
-      elif action in ["swap_exact_for_tokens", "/kava.swap.v1beta1.MsgSwapExactForTokens"]:
+      elif action in ["swap_exact_for_tokens", "/kava.swap.v1beta1.MsgSwapExactForTokens", "swap_for_exact_tokens"]:
         swap_event = get_event(raw_log["events"], "swap_trade")
 
         input_amount = get_attribute(swap_event["attributes"], "input")["value"]
@@ -395,9 +401,47 @@ def create_cryptact_csv(address):
             balance_sheet.put_spot_balance_sheet(currency, amount)
         elif len(transfer_event) != 0:
           raise ValueError("too many transfer events")
-      else:
-        raise ValueError(f"undefined action {action}")
+      elif action == "swap_deposit":
+        events = raw_log["events"]
+        SwapDeposit(events,fee)
+      elif action == "swap_withdraw":
+        events = raw_log["events"]
+        result = SwapWithDraw(events,fee)
+        print(result)
+        tmp = []
+        for i in result:
+          tmp.append(AddTimestampAndSource(i,timestamp,'kava'))
+          print(tmp)
+        results += tmp
 
+        # print(results)
+      elif action == "committee_vote":
+        pass
+      elif action == '/kava.router.v1beta1.MsgDelegateMintDeposit':
+        # KavaEarn Deposit (bKava)
+        events = raw_log["events"]
+        result = MintAndDelegate(events,fee)
+        tmp = []
+        for i in result:
+          tmp.append(AddTimestampAndSource(i,timestamp,'kava'))
+          print(tmp)
+        results += tmp
+        pass
+      elif action == '/kava.router.v1beta1.MsgWithdrawBurn':
+        # KavaEarn Withdraw (bKava)
+        events = raw_log["events"]
+        logger.info('/kava.router.v1beta1.MsgWithdrawBurn')
+        result = BurnAndWithdraw(events,fee)
+        tmp = []
+        for i in result:
+          tmp.append(AddTimestampAndSource(i,timestamp,'kava'))
+        results += tmp
+        print(result)
+        results += tmp
+      else:
+        raise ValueError(f"undefined action {action} {txhash}")
+
+  # print(results)
   df = pd.DataFrame(results)
   df = df.sort_values('Timestamp')
   #logger.debug(df)
